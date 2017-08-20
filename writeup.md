@@ -34,65 +34,140 @@ You're reading it!
 
 #### 1. Explain how (and identify where in your code) you extracted HOG features from the training images.
 
-The code for this step is contained in the first code cell of the IPython notebook (or in lines # through # of the file called `some_file.py`).  
+The code for this step is contained in the code cell titled HOG Classifier in the IPython notebook [vehicle-detection.ipynb](vehicle-detection.ipynb)
 
 I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an example of one of each of the `vehicle` and `non-vehicle` classes:
 
-![alt text][image1]
+`vehicle`
 
-I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`).  I grabbed random images from each of the two classes and displayed them to get a feel for what the `skimage.hog()` output looks like.
+![](examples/216.png)
 
-Here is an example using the `YCrCb` color space and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
+`non-vehicle`
 
+![](examples/extra40.png)
 
-![alt text][image2]
+I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`).
 
 #### 2. Explain how you settled on your final choice of HOG parameters.
-
-I tried various combinations of parameters and...
-
 #### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
-I trained a linear SVM using...
+I trained a linear SVM classifier to classify car and non-car images. The training data set is split into 80% and 20% for training and validation.
+
+The validation set accuracy is used as a guide to choose various parameters as listed below:
+
+````python
+colorspace = 'YCrCb' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+orient = 9  # HOG orientations
+pix_per_cell = 8 # HOG pixels per cell
+cell_per_block = 2 # HOG cells per block
+hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
+spatial_size = (16, 16) # Spatial binning dimensions
+hist_bins = 16    # Number of histogram bins
+spatial_feat = True # Spatial features on or off
+hist_feat = True # Histogram features on or off
+hog_feat = True # HOG features on or off
+````
+
+In the choice of color space, it appeared that YCrCb and HSV performed the best. The above set of parameters achieved an accuracy of 98.96%
+
+A few things would further improve accuracy to 99.58%, they include using `spatial_size=(32,32)`, `hist_bins=32` and using a 3rd order RBF kernel in SVM classifier.
+But I decided not to use them due to substantially more computation overhead.
+
 
 ### Sliding Window Search
 
 #### 1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
 
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
+I followed the sub-sampling method in the course material. I started with having a large window scan and gradually added more and more smaller windows.
 
-![alt text][image3]
+Each of the scan/search is specified with a region of interest (i.e. a set of coordinates `xstart, xstop, ystart, ystop`) in function find_car()
+
+I extracted 28 frames from the project_video.mp4. Using these images along with the original 6 test images I tuned the window sizes/scales and window overlap.
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
+Ultimately I searched on 3 scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.
 
-![alt text][image4]
+The following image illustrates the scanning pattern and window sizes (with `cells_per_step=1`)
+
+![](examples/scan.jpg)
+
+The yellow region is scanned with `scale=1.0`, the green region is scanned with `scale=1.5` and the red region is canned with `scale=2.0`.
+
+The code implemented this is in cell 21 and cited below:
+
+````python
+    bbox_list = []
+    scan_list = []
+    img = mpimg.imread(i)
+
+    scan_img = np.copy(img)
+
+    xstart = int(img.shape[1]*.2)
+    xstop = int(img.shape[1]*1.0)
+    ystart = int(img.shape[0]*.50)
+    ystop = int(img.shape[0]*0.9)
+    scale = 1.5
+    b_list, s_list = find_cars(img, xstart, xstop, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins,
+                              cells_per_step=1)
+    bbox_list = bbox_list + b_list
+    scan_list = scan_list + s_list
+
+    draw_boxes(scan_img, s_list, thickness=2, c=(0,255,0))
+
+
+    xstart = int(img.shape[1]*.2)
+    xstop = int(img.shape[1]*.8)
+    ystart = int(img.shape[0]*.5)
+    ystop = int(img.shape[0]*.85)
+    scale = 1.0
+    b_list, s_list = find_cars(img, xstart, xstop, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins,
+                              cells_per_step=1)
+    bbox_list = bbox_list + b_list
+    scan_list = scan_list + s_list
+
+    draw_boxes(scan_img, s_list, thickness=2, c=(255,255,0))
+
+
+    xstart = int(img.shape[1]*.2)
+    xstop = int(img.shape[1]*1.0)
+    ystart = int(img.shape[0]*.55)
+    ystop = int(img.shape[0]*1.0)
+    scale = 2.0
+    b_list, s_list = find_cars(img, xstart, xstop, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins,
+                              cells_per_step=1)
+    bbox_list = bbox_list + b_list
+    scan_list = scan_list + s_list
+
+    draw_boxes(scan_img, s_list, thickness=2, c=(255,0,0))
+````
+
+
+Here are some example images showing the results (scanning pattern, raw detection, heatmap, and car position):
+
+![](test_images/result_project_video_t=10.61.jpg)
+
+![](test_images/result_project_video_t=29.18.jpg)
+
+![](test_images/result_project_video_t=42.44.jpg)
+
+
 ---
 
 ### Video Implementation
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./project_video_output.mp4)
 
 
 #### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+I recorded the positions of positive detections in each frame of the video.
+From the positive detections I created a heatmap and then thresholded (with `threshold=2`) that map to identify vehicle positions.
+I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.
+I then assumed each blob corresponded to a vehicle. I constructed bounding boxes to cover the area of each blob detected.
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
-
-### Here are six frames and their corresponding heatmaps:
-
-![alt text][image5]
-
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
-
+A few examples are shown above, more examples are available in test_images folder with filenames such as result_project_*.jpg
 
 ---
 
@@ -100,5 +175,9 @@ Here's an example result showing the heatmap from a series of frames of video, t
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+A few areas can certainly use some improvements:
 
+* Implementing some sort of contrast enhancement / equalization might improve classification accuracy
+* Average over several frames could probably stabilize the bounding box and help reject false positive.
+* In addition, currently the processing of the video takes a long time. If tracking is implemented I wonder if we can significantly reduce the area to scan (though, how do we avoid missing cars appearing in positions not previously seen?)
+* The vehicle far ahead could not be detected, one reason is that the car color blends into the road quite well. The 2nd reason I think is that we don't have enough training examples for such gray cars with low resolution.
